@@ -5,7 +5,7 @@ Scripts for training/running models to generate a natural language sentence from
 For example, given `he [###] another [###] as governor [###] [###] .`,
 a trained model generated samples, `he was another lieutenant as governor of <unk>.`
 or `he defined another seminary as governor of somerset.`
-(btw, a raw sentence is `he sought another term as governor in 1927.`)
+(btw, its original sentence is `he sought another term as governor in 1927.`).
 
 
 ## Usage
