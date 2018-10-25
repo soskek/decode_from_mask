@@ -184,10 +184,10 @@ class DecoderModel(chainer.Chain):
             self.decoder = DecoderRNN(n_layers, n_units, n_units, dropout)
             self.attention = AttentionMechanism(n_units, n_att_units=128)
             self.output = NormalOutputLayer(None, n_vocab)
-            self.projection = L.Linear(None, n_units // 2)
-            # self.mlp = chainer.Sequential(
-            #    L.Highway(n_units),
-            #    L.Highway(n_units))
+            self.projection = chainer.Sequential(
+                L.Linear(None, n_units // 2),
+                L.Highway(n_units // 2))
+
         self.dropout = dropout
         self.n_units = n_units
         self.n_layers = n_layers
@@ -217,11 +217,13 @@ class DecoderModel(chainer.Chain):
             # are stored at odd indices
             hx = hx[::2]
             cx = cx[::2]
-        _, _, os = self.decoder(hx, cx, eys)
+        # _, _, os = self.decoder(hx, cx, eys)
+        _, _, os = self.decoder(None, None, eys)
 
         # It is faster to concatenate data before calculating loss
         # because only one matrix multiplication is called.
         concat_os = F.concat(os, axis=0)
+        concat_os = F.dropout(concat_os, self.dropout)
         concat_ys_out = F.concat(ys_out, axis=0)
 
         if hasattr(self, 'attention'):
@@ -269,9 +271,10 @@ class DecoderModel(chainer.Chain):
         with chainer.no_backprop_mode(), chainer.using_config('train', False):
             exs = sequence_embed(self.embed, xs)
             h, c, enc_os = self.encoder(None, None, exs)
-            if self.use_bidirectional:
-                h = h[::2]
-                c = c[::2]
+            # if self.use_bidirectional:
+            #     h = h[::2]
+            #     c = c[::2]
+            h, c = None, None
             ys = self.xp.full(batch, EOS, np.int32)
             result = []
             for i in range(max_length):

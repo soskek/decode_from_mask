@@ -51,11 +51,11 @@ def main():
     train = chain_utils.SequenceChainDataset(
         args.train_path, vocab, chain_length=1)
     train = chain_utils.MaskingChainDataset(
-        train, vocab['<mask>'], ratio=0.3)
+        train, vocab['<mask>'], ratio=0.5)
     valid = chain_utils.SequenceChainDataset(
         args.valid_path, vocab, chain_length=1)
     valid = chain_utils.MaskingChainDataset(
-        valid, vocab['<mask>'], ratio=0.3)
+        valid, vocab['<mask>'], ratio=0.5)
 
     print('#train =', len(train))
     print('#valid =', len(valid))
@@ -147,9 +147,9 @@ def main():
         print('@PREm: ' + format_by_length(resultM_sentence))
         print('@PREr: ' + format_by_length(resultR_sentence))
         print('@GOLD: ' + format_by_length(target_sentence))
-        print('------------------------------')
+        print('@------------------------------')
     trainer.extend(
-        translate, trigger=(200, 'iteration'))
+        translate, trigger=(500, 'iteration'))
 
     record_trigger = training.triggers.MinValueTrigger(
         'validation/main/perp',
