@@ -176,12 +176,16 @@ class DecoderModel(chainer.Chain):
 
     def __init__(self, n_vocab, n_units, n_layers=2, dropout=0.5):
         super(DecoderModel, self).__init__()
+        z_num = 50
+        z_dim = 32
         with self.init_scope():
             self.embed = L.EmbedID(n_vocab, n_units)
+            self.embed_z = L.EmbedID(z_num, z_dim)
             EncoderRNN = L.NStepBiLSTM
             DecoderRNN = L.NStepLSTM
             self.encoder = EncoderRNN(n_layers, n_units, n_units, dropout)
-            self.decoder = DecoderRNN(n_layers, n_units, n_units, dropout)
+            self.decoder = DecoderRNN(
+                n_layers, n_units + z_dim, n_units, dropout)
             self.attention = AttentionMechanism(n_units, n_att_units=128)
             self.output = NormalOutputLayer(None, n_vocab)
             self.projection = chainer.Sequential(
@@ -197,7 +201,7 @@ class DecoderModel(chainer.Chain):
         hs, cs, y_seq_batch = encoder(None, None, e_seq_batch)
         return hs, cs, y_seq_batch
 
-    def __call__(self, xs, ys):
+    def __call__(self, xs, ys, zs=None):
         # Prepare auto-regressive sequences
         # eos = self.xp.array([EOS], np.int32)
         # ys_in = [F.concat([eos, y], axis=0) for y in ys]
@@ -208,6 +212,10 @@ class DecoderModel(chainer.Chain):
         # Both xs and ys_in are lists of arrays.
         exs = sequence_embed(self.embed, xs)
         eys = sequence_embed(self.embed, ys_in)
+
+        if zs is not None:
+            ezs = sequence_embed(self.embed_z, zs)
+            eys = concat_sequence_zs(eys, ezs)
 
         batch = len(xs)
         # None represents a zero vector in an encoder.
@@ -231,7 +239,12 @@ class DecoderModel(chainer.Chain):
             concat_vs = F.concat(vs, axis=0)
             concat_os = F.concat(
                 [concat_os, concat_vs], axis=1)
-            concat_os = self.projection(concat_os)
+
+        if zs is not None:
+            concat_os = F.concat(
+                [concat_os, F.concat(ezs, axis=0)], axis=1)
+
+        concat_os = self.projection(concat_os)
 
         allloss = self.output.output_and_loss(
             concat_os, concat_ys_out, reduce='no')
@@ -256,7 +269,11 @@ class DecoderModel(chainer.Chain):
     def calculate_loss(self, batch_chain):
         xs = batch_chain[0]
         ys = batch_chain[1]
-        return self(xs, ys)
+        if len(batch_chain) == 3:
+            zs = batch_chain[2]
+            return self(xs, ys, zs=zs)
+        else:
+            return self(xs, ys)
 
     def generate_from_chain(self, chain,
                             max_length=100, sampling='random', temperature=1.):
@@ -264,12 +281,15 @@ class DecoderModel(chainer.Chain):
         return self.generate(xs, max_length, sampling, temperature)
 
     def generate(self, xs, max_length=100, sampling='random', temperature=1.,
-                 gold=None):
+                 gold=None, zs=None):
         batch = len(xs)
         if gold is not None:
             max_length = len(gold[0]) - 1
         with chainer.no_backprop_mode(), chainer.using_config('train', False):
             exs = sequence_embed(self.embed, xs)
+            if zs is not None:
+                ezs = sequence_embed(self.embed_z, zs)
+
             h, c, enc_os = self.encoder(None, None, exs)
             # if self.use_bidirectional:
             #     h = h[::2]
@@ -279,7 +299,9 @@ class DecoderModel(chainer.Chain):
             result = []
             for i in range(max_length):
                 eys = self.embed(ys)
-                eys = F.split_axis(eys, batch, 0)
+                if zs is not None:
+                    eys = F.concat([eys, ezs[0][i:i+1]], axis=1)
+                eys = F.split_axis(eys, batch, 0)  # always 1
                 h, c, ys = self.decoder(h, c, eys)
                 cys = F.concat(ys, axis=0)
 
@@ -287,7 +309,10 @@ class DecoderModel(chainer.Chain):
                     vs = self.attention(ys, enc_os)
                     cvs = F.concat(vs, axis=0)
                     cys = F.concat([cys, cvs], axis=1)
-                    cys = self.projection(cys)
+
+                if zs is not None:
+                    cys = F.concat([cys, ezs[0][i:i+1]], axis=1)
+                cys = self.projection(cys)
 
                 if gold is not None \
                    and xs[0][i + 1] != MASK:
@@ -358,3 +383,15 @@ def sequence_embed(embed, xs, dropout=0.):
     ex = F.dropout(ex, ratio=dropout)
     exs = F.split_axis(ex, x_section, 0)
     return exs
+
+
+def concat_sequence_zs(es, zs):
+    x_len = [len(e) for e in es]
+    z_len = [len(z) for z in zs]
+    assert all(l1 == l2 for l1, l2 in zip(x_len, z_len))
+    x_section = np.cumsum(x_len[:-1])
+    E = F.concat(es, axis=0)
+    Z = F.concat(zs, axis=0)
+    EZ = F.concat([E, Z], axis=1)
+    ezs = F.split_axis(EZ, x_section, 0)
+    return ezs

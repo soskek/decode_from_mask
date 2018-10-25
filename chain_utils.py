@@ -118,10 +118,12 @@ class SequenceChainDataset(dataset_mixin.DatasetMixin):
 
 class MaskingChainDataset(dataset_mixin.DatasetMixin):
 
-    def __init__(self, dataset, mask, ratio=0.3):
+    def __init__(self, dataset, mask, vocab, ratio=0.3, z_type='length'):
         self._dataset = dataset
         self.mask = mask
         self.ratio = ratio
+        self.z_type = z_type
+        self.inv_vocab = {i: w for w, i in vocab.items()}
         # TODO: varmask
 
     def __len__(self):
@@ -136,8 +138,21 @@ class MaskingChainDataset(dataset_mixin.DatasetMixin):
         # keep bos and eos
         _x = x.copy()
         _x[1:-1] = np.where(rand, self.mask, _x[1:-1])
-        return (_x, x)
-        # return chain
+        if self.z_type == 'length':
+            z = np.array(
+                [len(self.inv_vocab[widx])
+                 for widx in x.copy()[1:]], 'i')
+            if chainer.config.train:
+                z += np.random.randint(-2, 3, size=z.shape)
+                # more/less than two words
+            z = np.clip(z, 1, 40)
+            if chainer.config.train:
+                z = np.where(np.random.rand(*z.shape) > 0.5, z, 0)
+                # half of tokens are unlabeled (0)
+                # otherwise, length label is given, although little perturbed
+            return (_x, x, z)
+        else:
+            return (_x, x)
 
     def get_random(self):
         i = np.random.randint(len(self))

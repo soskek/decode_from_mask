@@ -51,11 +51,11 @@ def main():
     train = chain_utils.SequenceChainDataset(
         args.train_path, vocab, chain_length=1)
     train = chain_utils.MaskingChainDataset(
-        train, vocab['<mask>'], ratio=0.5)
+        train, vocab['<mask>'], vocab, ratio=0.5)
     valid = chain_utils.SequenceChainDataset(
         args.valid_path, vocab, chain_length=1)
     valid = chain_utils.MaskingChainDataset(
-        valid, vocab['<mask>'], ratio=0.5)
+        valid, vocab['<mask>'], vocab, ratio=0.5)
 
     print('#train =', len(train))
     print('#valid =', len(valid))
@@ -116,14 +116,16 @@ def main():
 
     @chainer.training.make_extension()
     def translate(trainer):
-        source, target = valid.get_random()
+        source, target, zs = valid.get_random()
         resultM = model.generate(
             [model.xp.array(source)],
             gold=[model.xp.array(target)],
+            zs=[model.xp.array(zs)],
             sampling='argmax')
         resultR = model.generate(
             [model.xp.array(source)],
             gold=[model.xp.array(target)],
+            zs=[model.xp.array(zs)],
             sampling='random')
 
         target_sentence = [inv_vocab[y] for y in target[1:-1].tolist()]
@@ -149,7 +151,7 @@ def main():
         print('@GOLD: ' + format_by_length(target_sentence))
         print('@------------------------------')
     trainer.extend(
-        translate, trigger=(500, 'iteration'))
+        translate, trigger=(20, 'iteration'))
 
     record_trigger = training.triggers.MinValueTrigger(
         'validation/main/perp',
