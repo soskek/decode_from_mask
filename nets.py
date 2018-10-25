@@ -261,8 +261,11 @@ class DecoderModel(chainer.Chain):
         xs = chain[0]
         return self.generate(xs, max_length, sampling, temperature)
 
-    def generate(self, xs, max_length=100, sampling='argmax', temperature=1.):
+    def generate(self, xs, max_length=100, sampling='random', temperature=1.,
+                 gold=None):
         batch = len(xs)
+        if gold is not None:
+            max_length = len(gold[0]) - 1
         with chainer.no_backprop_mode(), chainer.using_config('train', False):
             exs = sequence_embed(self.embed, xs)
             h, c, enc_os = self.encoder(None, None, exs)
@@ -283,15 +286,19 @@ class DecoderModel(chainer.Chain):
                     cys = F.concat([cys, cvs], axis=1)
                     cys = self.projection(cys)
 
-                wy = self.output.output(cys)
-                if sampling == 'random':
-                    wy /= temperature
-                    wy += self.xp.random.gumbel(size=wy.shape).astype('f')
-                    ys = self.xp.argmax(wy.data, axis=1).astype(np.int32)
-                elif sampling == 'argmax':
-                    ys = self.xp.argmax(wy.data, axis=1).astype(np.int32)
+                if gold is not None \
+                   and xs[0][i + 1] != MASK:
+                    ys = gold[0][i + 1][None]
                 else:
-                    raise ValueError
+                    wy = self.output.output(cys)
+                    if sampling == 'random':
+                        wy /= temperature
+                        wy += self.xp.random.gumbel(size=wy.shape).astype('f')
+                        ys = self.xp.argmax(wy.data, axis=1).astype(np.int32)
+                    elif sampling == 'argmax':
+                        ys = self.xp.argmax(wy.data, axis=1).astype(np.int32)
+                    else:
+                        raise ValueError
                 result.append(ys)
 
         result = cuda.to_cpu(

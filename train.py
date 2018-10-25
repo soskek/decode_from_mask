@@ -1,5 +1,6 @@
 from __future__ import print_function
 import argparse
+from itertools import zip_longest
 import json
 
 import chainer
@@ -116,17 +117,36 @@ def main():
     @chainer.training.make_extension()
     def translate(trainer):
         source, target = valid.get_random()
-        result = model.generate([model.xp.array(source)])
+        resultM = model.generate(
+            [model.xp.array(source)],
+            gold=[model.xp.array(target)],
+            sampling='argmax')
+        resultR = model.generate(
+            [model.xp.array(source)],
+            gold=[model.xp.array(target)],
+            sampling='random')
 
-        source_sentence = ' '.join(
-            [inv_vocab[x] for x in source[1:-1].tolist()])
-        target_sentence = ' '.join(
-            [inv_vocab[y] for y in target[1:-1].tolist()])
-        result_sentence = ' '.join([inv_vocab[y] for y in result['out']])
-        print('______________________________')
-        print('# MASK: ' + source_sentence)
-        print('# PRED: ' + result_sentence)
-        print('# GOLD: ' + target_sentence)
+        target_sentence = [inv_vocab[y] for y in target[1:-1].tolist()]
+        resultM_sentence = [inv_vocab[y] for y in resultM['out']]
+        resultR_sentence = [inv_vocab[y] for y in resultR['out']]
+        lens = [max(len(w1),
+                    len(w2) if w2 is not None else 1,
+                    len(w3) if w3 is not None else 1)
+                for w1, w2, w3 in zip_longest(
+            target_sentence, resultM_sentence, resultR_sentence)]
+        source_sentence = [
+            inv_vocab[x] if inv_vocab[x] != '<mask>' else '#' * lens[i]
+            for i, x in enumerate(source[1:-1].tolist())]
+
+        def format_by_length(sent):
+            return ' '.join('{:^{length:}}'.format(w, length=l)
+                            for w, l in zip(sent, lens))
+
+        print('@______________________________')
+        print('@MASK: ' + format_by_length(source_sentence))
+        print('@PREm: ' + format_by_length(resultM_sentence))
+        print('@PREr: ' + format_by_length(resultR_sentence))
+        print('@GOLD: ' + format_by_length(target_sentence))
         print('------------------------------')
     trainer.extend(
         translate, trigger=(200, 'iteration'))
