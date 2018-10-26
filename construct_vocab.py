@@ -17,7 +17,8 @@ with io.open(args.data, encoding='utf-8') as f:
     for line in f:
         words = line.split() + ['<eos>']
         for word in words:
-            count[word] += 1
+            if word.strip():
+                count[word] += 1
 
 vocab = {'<eos>': 0, '<unk>': 1, '<mask>': 2, '<varmask>': 3}
 for w, c in sorted(count.items(), key=lambda x: (-x[1], x[0])):

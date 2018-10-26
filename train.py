@@ -43,19 +43,31 @@ def main():
     parser.add_argument('--no-label', action='store_true')
 
     parser.add_argument('--validation', action='store_true')
+    parser.add_argument('--snli', action='store_true')
 
     args = parser.parse_args()
     print(json.dumps(args.__dict__, indent=2))
 
     vocab = json.load(open(args.vocab))
-    train = chain_utils.SequenceChainDataset(
-        args.train_path, vocab, chain_length=1)
-    train = chain_utils.MaskingChainDataset(
-        train, vocab['<mask>'], vocab, ratio=0.5)
-    valid = chain_utils.SequenceChainDataset(
-        args.valid_path, vocab, chain_length=1)
-    valid = chain_utils.MaskingChainDataset(
-        valid, vocab['<mask>'], vocab, ratio=0.5)
+
+    if args.snli:
+        train = chain_utils.SNLIDataset(
+            args.train_path, vocab)
+        train = chain_utils.MaskingChainDataset(
+            train, vocab['<mask>'], vocab, ratio=0.5)
+        valid = chain_utils.SNLIDataset(
+            args.valid_path, vocab)
+        valid = chain_utils.MaskingChainDataset(
+            valid, vocab['<mask>'], vocab, ratio=0.5)
+    else:
+        train = chain_utils.SequenceChainDataset(
+            args.train_path, vocab, chain_length=1)
+        train = chain_utils.MaskingChainDataset(
+            train, vocab['<mask>'], vocab, ratio=0.5)
+        valid = chain_utils.SequenceChainDataset(
+            args.valid_path, vocab, chain_length=1)
+        valid = chain_utils.MaskingChainDataset(
+            valid, vocab['<mask>'], vocab, ratio=0.5)
 
     print('#train =', len(train))
     print('#valid =', len(valid))
@@ -117,21 +129,29 @@ def main():
     @chainer.training.make_extension()
     def translate(trainer):
         example = valid.get_random()
-        if len(example) == 3:
+        if len(example) == 4:
+            source, target, zs, condition_source = example
+            zs = [model.xp.array(zs)]
+            conds = [model.xp.array(condition_source)]
+        elif len(example) == 3:
             source, target, zs = example
             zs = [model.xp.array(zs)]
-        else:
+            conds = None
+        elif len(example) == 2:
             source, target = example
             zs = None
+            conds = None
         resultM = model.generate(
             [model.xp.array(source)],
             gold=[model.xp.array(target)],
             zs=zs,
+            condition_xs=conds,
             sampling='argmax')
         resultR = model.generate(
             [model.xp.array(source)],
             gold=[model.xp.array(target)],
             zs=zs,
+            condition_xs=conds,
             sampling='random')
 
         target_sentence = [inv_vocab[y] for y in target[1:-1].tolist()]
@@ -151,13 +171,18 @@ def main():
                             for w, l in zip(sent, lens))
 
         print('@______________________________')
+        if condition_source is not None:
+            print('@label ' +
+                  chain_utils.inv_snli_label_vocab[int(zs[0][0])] + '\t')
+            print('@cond: ' + ' '.join(
+                inv_vocab[wi] for wi in condition_source[1:-1].tolist()))
         print('@MASK: ' + format_by_length(source_sentence))
         print('@PREm: ' + format_by_length(resultM_sentence))
         print('@PREr: ' + format_by_length(resultR_sentence))
         print('@GOLD: ' + format_by_length(target_sentence))
         print('@------------------------------')
     trainer.extend(
-        translate, trigger=(500, 'iteration'))
+        translate, trigger=(100, 'iteration'))
 
     record_trigger = training.triggers.MinValueTrigger(
         'validation/main/perp',

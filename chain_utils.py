@@ -76,6 +76,48 @@ def make_chain_dataset(path, vocab, chain_length=2, max_toks=120,
     return dataset
 
 
+snli_label_vocab = {
+    'neutral': 0,
+    'contradiction': 1,
+    'entailment': 2,
+}
+inv_snli_label_vocab = {i: w for w, i in snli_label_vocab.items()}
+
+
+def make_snli_dataset(path, vocab, max_toks=120):
+    dataset = []
+    chain = []
+    unk_id = vocab['<unk>']
+
+    def make_array(words1, words2, label):
+        tokens1 = np.array([vocab.get(w, unk_id) for w in words1], 'i')
+        tokens2 = np.array([vocab.get(w, unk_id) for w in words2], 'i')
+        labels = np.array([snli_label_vocab[label]] * (len(tokens2) - 1), 'i')
+        return (tokens1, tokens2, labels)
+
+    bar = progressbar.ProgressBar()
+    n_lines = sum(1 for _ in io.open(path, encoding='utf-8'))
+    for line in bar(io.open(path, encoding='utf-8'),
+                    max_value=n_lines):
+        if line.startswith('gold_label'):
+            continue
+        data = line.strip().split('\t')
+        label = data[0]
+        if label not in snli_label_vocab:
+            # '-' label is ignored
+            continue
+        sent1, sent2 = data[1], data[2]
+
+        def clean(sent):
+            return [w for w
+                    in sent.replace('(', '').replace(')', '').lower().split()
+                    if w.strip()]
+        words1 = ['<eos>'] + clean(sent1) + ['<eos>']
+        words2 = ['<eos>'] + clean(sent2) + ['<eos>']
+        dataset.append(make_array(words1, words2, label))
+    return dataset
+
+
 class SequenceChainDataset(dataset_mixin.DatasetMixin):
 
     def __init__(self, path, vocab, chain_length=2,
@@ -110,6 +152,25 @@ class SequenceChainDataset(dataset_mixin.DatasetMixin):
 
     def get_example(self, i):
         return self.get_subchain(self._idx2subchain_keys[i])
+
+    def get_random(self):
+        i = np.random.randint(len(self))
+        return self.get_example(i)
+
+
+class SNLIDataset(dataset_mixin.DatasetMixin):
+
+    def __init__(self, path, vocab):
+        self._dataset = make_snli_dataset(
+            path,
+            vocab=vocab,
+            max_toks=50)
+
+    def __len__(self):
+        return len(self._dataset)
+
+    def get_example(self, i):
+        return self._dataset[i]
 
     def get_random(self):
         i = np.random.randint(len(self))
@@ -165,21 +226,35 @@ class MaskingChainDataset(dataset_mixin.DatasetMixin):
 
     def get_example(self, i):
         chain = self._dataset.get_example(i)
-        assert len(chain) == 1
-        x = chain[0]
-        # if chainer.config.train:
-        rand = np.random.rand(x.size - 2) < self.ratio
-        # keep bos and eos
-        _x = x.copy()
-        _x[1:-1] = np.where(rand, self.mask, _x[1:-1])
-        if self.z_type == 'length':
-            z = make_length_label(x, self.inv_vocab)
-            return (_x, x, z)
-        elif self.z_type == 'initial':
-            z = make_initial_char_label(x, self.inv_vocab)
-            return (_x, x, z)
+
+        if len(chain) == 1:
+            x = chain[0]
+            # if chainer.config.train:
+            rand = np.random.rand(x.size - 2) < self.ratio
+            # keep bos and eos
+            _x = x.copy()
+            _x[1:-1] = np.where(rand, self.mask, _x[1:-1])
+            if self.z_type == 'length':
+                z = make_length_label(x, self.inv_vocab)
+                return (_x, x, z)
+            elif self.z_type == 'initial':
+                z = make_initial_char_label(x, self.inv_vocab)
+                return (_x, x, z)
+            else:
+                return (_x, x)
+        elif len(chain) == 3:
+            # snli
+            pre = chain[0]
+            x = chain[1]
+            z = chain[2]
+            # if chainer.config.train:
+            rand = np.random.rand(x.size - 2) < self.ratio
+            # keep bos and eos
+            _x = x.copy()
+            _x[1:-1] = np.where(rand, self.mask, _x[1:-1])
+            return (_x, x, z, pre)
         else:
-            return (_x, x)
+            raise ValueError
 
     def get_random(self):
         i = np.random.randint(len(self))

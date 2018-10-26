@@ -36,7 +36,42 @@ python construct_vocab.py --data datasets/wikitext-103-raw/wiki.train.tokens -t 
 
 
 ```
+mkdir logs
+mkdir outs
 python -u train.py -g 0 --train datasets/wikitext-103-raw/wiki.train.tokens --valid datasets/wikitext-103-raw/wiki.valid.tokens --vocab datasets/wikitext-103-raw/vocab.t100.json -u 256 --layer 1 --dropout 0.1 --batchsize 128 --lr 1e-3 --out outs/v1.u256 | tee logs/v1.u256
+```
+
+## Usage for Dataset with labels and condition sentences
+
+SNLI is the dataset.
+
+An generated example:
+```
+@label entailment
+@cond: a woman , wearing a white shirt and green shorts , sitting on a rock in a beautiful body of water .
+@MASK: the woman ###### ####### ######## ##### .
+@PREm: the woman   is   wearing    a     shirt . (greedy generation)
+@PREr: the woman enjoys  rocks    near   water . (sampling)
+@GOLD: the woman   is     not   standing  up   .
+```
+
+Usage:
+
+```
+# Download
+cd datasets
+curl https://nlp.stanford.edu/projects/snli/snli_1.0.zip -o snli_1.0.zip
+unzip snli_1.0.zip
+cd ..
+
+# Make a flattened sentence file
+# e.g.
+less datasets/snli_1.0/snli_1.0_train.txt | cut -f2 | cat <(less datasets/snli_1.0/snli_1.0_train.txt | cut -f3) | sed -E 's/\)//g' | sed -E 's/\(//g' > datasets/snli_1.0/snli_1.0_train.txt.sents
+# construct vocab
+python construct_vocab.py --data datasets/snli_1.0/snli_1.0_train.txt.sents -t 2 -s datasets/snli_1.0/vocab.t2.json
+
+# Train
+python -u train.py -g 0 --train datasets/snli_1.0/snli_1.0_train.txt --valid datasets/snli_1.0/snli_1.0_dev.txt --vocab datasets/snli_1.0/vocab.t2.json -u 512 --layer 1 --dropout 0.3 --batchsize 128 --lr 1e-3 --out outs/snli.v3.u512 --snli | tee logs/snli.v3.u512
 ```
 
 

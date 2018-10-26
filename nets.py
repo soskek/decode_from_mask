@@ -134,6 +134,7 @@ class AttentionMechanism(chainer.Chain):
                 The weight is computed by a learned function
                 of keys and queries.
         """
+
         concat_Q, q_pad_mask = prepare_attention(qs)
         batch, q_len, q_units = concat_Q.shape
         Q = func_dim3(self.W_query, concat_Q)
@@ -190,6 +191,13 @@ class DecoderModel(chainer.Chain):
             self.output = NormalOutputLayer(None, n_vocab)
             self.projection = chainer.Sequential(
                 L.Linear(None, n_units // 2),
+                L.Highway(n_units // 2),
+                L.Highway(n_units // 2))
+
+            self.encoder_cond = EncoderRNN(n_layers, n_units, n_units, dropout)
+            self.attention_cond = AttentionMechanism(n_units, n_att_units=128)
+            self.projection_pre = chainer.Sequential(
+                L.Linear(None, n_units // 2),
                 L.Highway(n_units // 2))
 
         self.dropout = dropout
@@ -201,7 +209,7 @@ class DecoderModel(chainer.Chain):
         hs, cs, y_seq_batch = encoder(None, None, e_seq_batch)
         return hs, cs, y_seq_batch
 
-    def __call__(self, xs, ys, zs=None):
+    def __call__(self, xs, ys, zs=None, condition_xs=None):
         # Prepare auto-regressive sequences
         # eos = self.xp.array([EOS], np.int32)
         # ys_in = [F.concat([eos, y], axis=0) for y in ys]
@@ -240,6 +248,18 @@ class DecoderModel(chainer.Chain):
             concat_os = F.concat(
                 [concat_os, concat_vs], axis=1)
 
+        if condition_xs is not None:
+            concat_os = self.projection_pre(concat_os)
+            eds = sequence_embed(self.embed, condition_xs)
+            _, _, enc_ds = self.encoder(None, None, eds)
+            o_len = [len(o) for o in os]
+            o_section = np.cumsum(o_len[:-1])
+            os = F.split_axis(concat_os, o_section, 0)
+            ds = self.attention_cond(os, enc_ds)
+            concat_ds = F.concat(ds, axis=0)
+            concat_os = F.concat(
+                [concat_os, concat_ds], axis=1)
+
         if zs is not None:
             concat_os = F.concat(
                 [concat_os, F.concat(ezs, axis=0)], axis=1)
@@ -269,7 +289,11 @@ class DecoderModel(chainer.Chain):
     def calculate_loss(self, batch_chain):
         xs = batch_chain[0]
         ys = batch_chain[1]
-        if len(batch_chain) == 3:
+        if len(batch_chain) == 4:
+            zs = batch_chain[2]
+            conds = batch_chain[3]
+            return self(xs, ys, zs=zs, condition_xs=conds)
+        elif len(batch_chain) == 3:
             zs = batch_chain[2]
             return self(xs, ys, zs=zs)
         else:
@@ -281,7 +305,7 @@ class DecoderModel(chainer.Chain):
         return self.generate(xs, max_length, sampling, temperature)
 
     def generate(self, xs, max_length=100, sampling='random', temperature=1.,
-                 gold=None, zs=None):
+                 gold=None, zs=None, condition_xs=None):
         batch = len(xs)
         if gold is not None:
             max_length = len(gold[0]) - 1
@@ -289,6 +313,12 @@ class DecoderModel(chainer.Chain):
             exs = sequence_embed(self.embed, xs)
             if zs is not None:
                 ezs = sequence_embed(self.embed_z, zs)
+
+            if condition_xs is not None:
+                eds = sequence_embed(self.embed, condition_xs)
+                _, _, enc_ds = self.encoder(None, None, eds)
+                o_len = [len(x) for x in xs]
+                o_section = np.cumsum(o_len[:-1])
 
             h, c, enc_os = self.encoder(None, None, exs)
             # if self.use_bidirectional:
@@ -310,8 +340,15 @@ class DecoderModel(chainer.Chain):
                     cvs = F.concat(vs, axis=0)
                     cys = F.concat([cys, cvs], axis=1)
 
+                if condition_xs is not None:
+                    cys = self.projection_pre(cys)
+                    ds = self.attention_cond([cys], enc_ds)
+                    cds = F.concat(ds, axis=0)
+                    cys = F.concat([cys, cds], axis=1)
+
                 if zs is not None:
                     cys = F.concat([cys, ezs[0][i:i+1]], axis=1)
+
                 cys = self.projection(cys)
 
                 if gold is not None \
