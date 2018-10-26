@@ -116,16 +116,22 @@ def main():
 
     @chainer.training.make_extension()
     def translate(trainer):
-        source, target, zs = valid.get_random()
+        example = valid.get_random()
+        if len(example) == 3:
+            source, target, zs = example
+            zs = [model.xp.array(zs)]
+        else:
+            source, target = example
+            zs = None
         resultM = model.generate(
             [model.xp.array(source)],
             gold=[model.xp.array(target)],
-            zs=[model.xp.array(zs)],
+            zs=zs,
             sampling='argmax')
         resultR = model.generate(
             [model.xp.array(source)],
             gold=[model.xp.array(target)],
-            zs=[model.xp.array(zs)],
+            zs=zs,
             sampling='random')
 
         target_sentence = [inv_vocab[y] for y in target[1:-1].tolist()]
@@ -151,7 +157,7 @@ def main():
         print('@GOLD: ' + format_by_length(target_sentence))
         print('@------------------------------')
     trainer.extend(
-        translate, trigger=(20, 'iteration'))
+        translate, trigger=(500, 'iteration'))
 
     record_trigger = training.triggers.MinValueTrigger(
         'validation/main/perp',

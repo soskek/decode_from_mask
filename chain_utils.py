@@ -116,9 +116,43 @@ class SequenceChainDataset(dataset_mixin.DatasetMixin):
         return self.get_example(i)
 
 
+# example of labels
+def make_length_label(x, inv_vocab, perturbation=1):
+    z = np.array(
+        [len(inv_vocab[widx])
+         for widx in x.copy()[1:]], 'i')
+    if chainer.config.train:
+        # stochastic noise
+        z += np.random.randint(-perturbation, perturbation+1, size=z.shape)
+    # limit the range of length
+    z = np.clip(z, 1, 40)
+    if chainer.config.train:
+        z = np.where(np.random.rand(*z.shape) > 0.5, z, 0)
+        # half of tokens are unlabeled (0)
+        # otherwise, length label is given, although little perturbed
+    return z
+
+
+def make_initial_char_label(x, inv_vocab, perturbation=1):
+    # https://en.wikipedia.org/wiki/List_of_Unicode_characters#Basic_Latin
+    z = np.array(
+        [10 - (ord('a') - ord(inv_vocab[widx][0]))
+         for widx in x.copy()[1:]], 'i')
+    if chainer.config.train:
+        # stochastic noise
+        z += np.random.randint(-perturbation, perturbation+1, size=z.shape)
+    # limit the range of length
+    z = np.clip(z, 1, 40)
+    if chainer.config.train:
+        z = np.where(np.random.rand(*z.shape) > 0.5, z, 0)
+        # half of tokens are unlabeled (0)
+        # otherwise, length label is given, although little perturbed
+    return z
+
+
 class MaskingChainDataset(dataset_mixin.DatasetMixin):
 
-    def __init__(self, dataset, mask, vocab, ratio=0.3, z_type='length'):
+    def __init__(self, dataset, mask, vocab, ratio=0.3, z_type=None):
         self._dataset = dataset
         self.mask = mask
         self.ratio = ratio
@@ -139,17 +173,10 @@ class MaskingChainDataset(dataset_mixin.DatasetMixin):
         _x = x.copy()
         _x[1:-1] = np.where(rand, self.mask, _x[1:-1])
         if self.z_type == 'length':
-            z = np.array(
-                [len(self.inv_vocab[widx])
-                 for widx in x.copy()[1:]], 'i')
-            if chainer.config.train:
-                z += np.random.randint(-2, 3, size=z.shape)
-                # more/less than two words
-            z = np.clip(z, 1, 40)
-            if chainer.config.train:
-                z = np.where(np.random.rand(*z.shape) > 0.5, z, 0)
-                # half of tokens are unlabeled (0)
-                # otherwise, length label is given, although little perturbed
+            z = make_length_label(x, self.inv_vocab)
+            return (_x, x, z)
+        elif self.z_type == 'initial':
+            z = make_initial_char_label(x, self.inv_vocab)
             return (_x, x, z)
         else:
             return (_x, x)
