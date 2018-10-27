@@ -249,12 +249,13 @@ class DecoderModel(chainer.Chain):
                 [concat_os, concat_vs], axis=1)
 
         if condition_xs is not None:
-            concat_os = self.projection_pre(concat_os)
+            # concat_os = self.projection_pre(concat_os)
             eds = sequence_embed(self.embed, condition_xs)
             _, _, enc_ds = self.encoder(None, None, eds)
             o_len = [len(o) for o in os]
             o_section = np.cumsum(o_len[:-1])
-            os = F.split_axis(concat_os, o_section, 0)
+            # os = F.split_axis(concat_os, o_section, 0)
+            os = F.split_axis(self.projection_pre(concat_os), o_section, 0)
             ds = self.attention_cond(os, enc_ds)
             concat_ds = F.concat(ds, axis=0)
             concat_os = F.concat(
@@ -341,8 +342,11 @@ class DecoderModel(chainer.Chain):
                     cys = F.concat([cys, cvs], axis=1)
 
                 if condition_xs is not None:
-                    cys = self.projection_pre(cys)
-                    ds = self.attention_cond([cys], enc_ds)
+                    # cys = self.projection_pre(cys)
+                    # ds = self.attention_cond([cys], enc_ds)
+
+                    ds = self.attention_cond(
+                        [self.projection_pre(cys)], enc_ds)
                     cds = F.concat(ds, axis=0)
                     cys = F.concat([cys, cds], axis=1)
 
