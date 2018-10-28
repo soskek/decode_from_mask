@@ -143,13 +143,11 @@ def main():
             conds = None
         resultM = model.generate(
             [model.xp.array(source)],
-            gold=[model.xp.array(target)],
             zs=zs,
             condition_xs=conds,
             sampling='argmax')
         resultR = model.generate(
             [model.xp.array(source)],
-            gold=[model.xp.array(target)],
             zs=zs,
             condition_xs=conds,
             sampling='random')
