@@ -306,10 +306,9 @@ class DecoderModel(chainer.Chain):
         return self.generate(xs, max_length, sampling, temperature)
 
     def generate(self, xs, max_length=100, sampling='random', temperature=1.,
-                 gold=None, zs=None, condition_xs=None):
+                 zs=None, condition_xs=None):
         batch = len(xs)
-        if gold is not None:
-            max_length = len(gold[0]) - 1
+        max_length = len(xs[0]) - 1
         with chainer.no_backprop_mode(), chainer.using_config('train', False):
             exs = sequence_embed(self.embed, xs)
             if zs is not None:
@@ -355,9 +354,8 @@ class DecoderModel(chainer.Chain):
 
                 cys = self.projection(cys)
 
-                if gold is not None \
-                   and xs[0][i + 1] != MASK:
-                    ys = gold[0][i + 1][None]
+                if xs[0][i + 1] != MASK:
+                    ys = xs[0][i + 1][None]
                 else:
                     wy = self.output.output(cys)
                     if sampling == 'random':
