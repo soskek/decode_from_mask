@@ -71,7 +71,7 @@ less datasets/snli_1.0/snli_1.0_train.txt | cut -f2 | cat <(less datasets/snli_1
 python construct_vocab.py --data datasets/snli_1.0/snli_1.0_train.txt.sents -t 2 -s datasets/snli_1.0/vocab.t2.json
 
 # Train
-python -u train.py -g 0 --train datasets/snli_1.0/snli_1.0_train.txt --valid datasets/snli_1.0/snli_1.0_dev.txt --vocab datasets/snli_1.0/vocab.t2.json -u 512 --layer 1 --dropout 0.3 --batchsize 128 --lr 1e-3 --out outs/snli.v3.u512 --snli | tee logs/snli.v3.u512
+python -u train.py -g 0 --train datasets/snli_1.0/snli_1.0_train.txt --valid datasets/snli_1.0/snli_1.0_dev.txt --vocab datasets/snli_1.0/vocab.t2.json -u 512 --layer 1 --epoch 40 --dropout 0.2 --batchsize 128 --lr 1e-3 --out outs/snli.u512 --snli | tee logs/snli.u512
 ```
 
 
