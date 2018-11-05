@@ -129,6 +129,7 @@ def main():
     @chainer.training.make_extension()
     def translate(trainer):
         example = valid.get_random()
+        condition_source = None
         if len(example) == 4:
             source, target, zs, condition_source = example
             zs = [model.xp.array(zs)]

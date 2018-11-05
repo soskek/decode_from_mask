@@ -88,7 +88,7 @@ def main():
             zs=zs,
             condition_xs=conds,
             sampling='random',
-            temperature=0.5)
+            temperature=1.)
 
         target_sentence = [inv_vocab[y] for y in target[1:-1].tolist()]
         resultM_sentence = [inv_vocab[y] for y in resultM['out']]

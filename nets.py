@@ -284,8 +284,8 @@ class DecoderModel(chainer.Chain):
         chainer.report(
             {'perp': perp}, self)
         # coef = (1. - mask) * 0.01
-        coef = (1. - mask) * 0.1
-        # coef = (1. - mask) * 1.
+        # coef = (1. - mask) * 0.1
+        coef = (1. - mask) * 1.
         loss = loss + F.sum(coef * allloss) / batch
         return loss
 
