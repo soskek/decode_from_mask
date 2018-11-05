@@ -309,6 +309,13 @@ class DecoderModel(chainer.Chain):
 
     def generate(self, xs, max_length=100, sampling='random', temperature=1.,
                  zs=None, condition_xs=None):
+        """
+        TODO(sosk): I am not sure we should re-make the mask during each word sampling.
+        e.g.
+          If generating "The" as the first word of "### ### is watching ### ### .",
+          should we modify the mask "The ### is watching ### ### ." at next step
+          and decode from the new mask and "The "?
+        """
         batch = len(xs)
         max_length = len(xs[0]) - 1
         with chainer.no_backprop_mode(), chainer.using_config('train', False):
