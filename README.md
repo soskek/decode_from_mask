@@ -74,6 +74,12 @@ python construct_vocab.py --data datasets/snli_1.0/snli_1.0_train.txt.sents -t 2
 python -u train.py -g 0 --train datasets/snli_1.0/snli_1.0_train.txt --valid datasets/snli_1.0/snli_1.0_dev.txt --vocab datasets/snli_1.0/vocab.t2.json -u 512 --layer 1 --epoch 40 --dropout 0.2 --batchsize 128 --lr 1e-3 --out outs/snli.u512 --snli | tee logs/snli.u512
 ```
 
+Let's sample:
+
+```
+python -u generate.py -g 0 --vocab datasets/snli_1.0/vocab.t2.json -u 512 --layer 1 --resume outs/snli.u512/best_model.npz
+```
+
 
 ## License
 
