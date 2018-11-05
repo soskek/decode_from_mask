@@ -17,14 +17,14 @@ def main():
                         help='GPU ID (negative value indicates CPU)')
     parser.add_argument('--out', '-o', default='result',
                         help='Directory to output the result')
-    parser.add_argument('--batchsize', '-b', type=int, default=32,
+    parser.add_argument('--batchsize', '-b', type=int, default=128,
                         help='Number of examples in each mini-batch')
-    parser.add_argument('--epoch', '-e', type=int, default=5,
+    parser.add_argument('--epoch', '-e', type=int, default=30,
                         help='Number of sweeps over the dataset to train')
     parser.add_argument('--gradclip', '-c', type=float, default=10,
                         help='Gradient norm threshold to clip')
     parser.add_argument('--lr', type=float, default=1e-4)
-    parser.add_argument('--unit', '-u', type=int, default=1024,
+    parser.add_argument('--unit', '-u', type=int, default=512,
                         help='Number of LSTM units in each layer')
     parser.add_argument('--layer', type=int, default=2)
     parser.add_argument('--dropout', type=float, default=0.5)
