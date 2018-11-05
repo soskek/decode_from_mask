@@ -87,7 +87,7 @@ def main():
             [model.xp.array(source)],
             zs=zs,
             condition_xs=conds,
-            sampling='random',
+            sampling='topk_random',
             temperature=1.)
 
         target_sentence = [inv_vocab[y] for y in target[1:-1].tolist()]

@@ -233,8 +233,8 @@ class DecoderModel(chainer.Chain):
             # are stored at odd indices
             hx = hx[::2]
             cx = cx[::2]
-        # _, _, os = self.decoder(hx, cx, eys)
-        _, _, os = self.decoder(None, None, eys)
+        _, _, os = self.decoder(hx, cx, eys)
+        # _, _, os = self.decoder(None, None, eys)
 
         # It is faster to concatenate data before calculating loss
         # because only one matrix multiplication is called.
@@ -323,10 +323,9 @@ class DecoderModel(chainer.Chain):
                 o_section = np.cumsum(o_len[:-1])
 
             h, c, enc_os = self.encoder(None, None, exs)
-            # if self.use_bidirectional:
-            #     h = h[::2]
-            #     c = c[::2]
-            h, c = None, None
+            if self.use_bidirectional:
+                h = h[::2]
+                c = c[::2]
             ys = self.xp.full(batch, EOS, np.int32)
             result = []
             for i in range(max_length):
@@ -364,6 +363,13 @@ class DecoderModel(chainer.Chain):
                         wy /= temperature
                         wy += self.xp.random.gumbel(size=wy.shape).astype('f')
                         ys = self.xp.argmax(wy.data, axis=1).astype(np.int32)
+                    elif sampling == 'topk_random':
+                        K = 10
+                        wy /= temperature
+                        wy = wy.array
+                        wy[0, self.xp.argsort(wy, axis=1)[:-K]] -= 100.
+                        wy += self.xp.random.gumbel(size=wy.shape).astype('f')
+                        ys = self.xp.argmax(wy, axis=1).astype(np.int32)
                     elif sampling == 'argmax':
                         ys = self.xp.argmax(wy.data, axis=1).astype(np.int32)
                     else:
